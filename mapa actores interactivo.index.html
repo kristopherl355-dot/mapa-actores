@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa de Actores - Laguna Santa Teresita | San Luis</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; background-color: #f4f6f9; }
+
+    #sidebar {
+      width: 380px;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+
+    .header {
+      background: #1b5e20;
+      color: white;
+      padding: 16px 15px;
+    }
+
+    .header h2 { font-size: 1.1rem; margin-bottom: 4px; }
+    .header p { font-size: 0.8rem; opacity: 0.9; }
+
+    .admin-panel {
+      background: #e8f5e9;
+      padding: 12px;
+      border-bottom: 2px solid #a5d6a7;
+    }
+
+    .admin-panel h3 {
+      font-size: 0.85rem;
+      color: #1b5e20;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .admin-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .admin-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-admin {
+      flex: 1;
+      background: #2e7d32;
+      color: white;
+      border: none;
+      padding: 7px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+
+    .btn-admin:hover { background: #1b5e20; }
+    .btn-admin.active { background: #c62828; }
+    .btn-admin.secondary { background: #0277bd; }
+
+    .coord-display {
+      background: #fff;
+      padding: 6px 8px;
+      border: 1px solid #c8e6c9;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: monospace;
+      color: #2e7d32;
+      word-break: break-all;
+    }
+
+    #details-panel {
+      padding: 12px 15px;
+      background: #f9fbe7;
+      border-bottom: 2px solid #c0ca33;
+      display: none;
+    }
+
+    #details-panel.active { display: block; }
+
+    .details-title {
+      font-size: 0.95rem;
+      color: #2e7d32;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: #333;
+    }
+
+    .details-item { background: #fff; padding: 5px 8px; border-radius: 4px; border: 1px solid #e0e0e0; }
+    .details-item strong { display: block; color: #555; font-size: 0.72rem; }
+
+    .search-box {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      outline: none;
+      font-size: 0.85rem;
+    }
+
+    .actors-list {
+      flex: 1;
+      overflow-y: auto;
+      list-style: none;
+    }
+
+    .actor-card {
+      padding: 9px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .actor-card:hover, .actor-card.selected {
+      background: #f1f8e9;
+      border-left: 4px solid #2e7d32;
+    }
+
+    .actor-card h4 {
+      font-size: 0.88rem;
+      color: #1b5e20;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .actor-card p { font-size: 0.78rem; color: #555; margin-top: 2px; }
+
+    #map { flex: 1; height: 100%; }
+
+    .icon-symbol {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+    }
+    .symbol-triangle {
+      width: 0; height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 12px solid #ff6f00;
+    }
+    .symbol-circle {
+      border-radius: 50%;
+      background: #1565c0;
+    }
+    
+    .landmark-icon {
+      font-size: 16px;
+      text-align: center;
+      line-height: 24px;
+      background: white;
+      border-radius: 50%;
+      border: 2px solid #333;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <div class="header">
+      <h2>Laguna Santa Teresita</h2>
+      <p>Cartografía Social y Mapa de Actores - Barrio San Luis</p>
+    </div>
+
+    <!-- PANEL DE ADMINISTRACIÓN -->
+    <div class="admin-panel" id="adminPanel">
+      <h3>⚙ Panel de Administración</h3>
+      <div class="admin-controls">
+        <div class="admin-row">
+          <button class="btn-admin" id="btnEditMode" onclick="toggleModoEdicion()">Modo Ubicación</button>
+          <button class="btn-admin secondary" onclick="exportarCoordenadas()">Exportar JSON</button>
+        </div>
+        <div class="coord-display" id="adminCoordDisplay">
+          Haz clic en el mapa para obtener Lat/Lng...
+        </div>
+      </div>
+    </div>
+
+    <div id="details-panel">
+      <div class="details-title">
+        <span id="det-nombre">Nombre Actor</span>
+        <span id="det-icono"></span>
+      </div>
+      <div class="details-grid">
+        <div class="details-item">
+          <strong>Tipo / Rol:</strong>
+          <span id="det-tipo">-</span>
+        </div>
+        <div class="details-item">
+          <strong>Antigüedad:</strong>
+          <span id="det-antiguedad">-</span>
+        </div>
+        <div class="details-item" style="grid-column: span 2;">
+          <strong>Dirección / Ubicación:</strong>
+          <span id="det-direccion">-</span>
+        </div>
+        <div class="details-item" style="grid-column: span 2;">
+          <strong>Estudiante Investigador:</strong>
+          <span id="det-investigador">-</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Buscar actor, familia o dirección..." onkeyup="filtrarActores()">
+    </div>
+
+    <ul class="actors-list" id="actorsList"></ul>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let modoEdicion = false;
+    let actorSeleccionadoId = null;
+
+    const map = L.map('map').setView([7.8930, -72.4835], 17);
+
+    // Servidores Esri Satélite + Calles
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19,
+      attribution: 'Tiles © Esri'
+    }).addTo(map);
+
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19
+    }).addTo(map);
+
+    const iconoTriangulo = L.divIcon({
+      className: 'custom-triangle',
+      html: `<svg width="24" height="24" viewBox="0 0 24 24"><polygon points="12,2 22,22 2,22" fill="#ff6f00" stroke="#ffffff" stroke-width="2"/></svg>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    const iconoCirculo = L.divIcon({
+      className: 'custom-circle',
+      html: `<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#1565c0" stroke="#ffffff" stroke-width="2"/></svg>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    // HITOS INSTITUCIONALES
+    const hitos = [
+      { nombre: "💧 Laguna Santa Teresita (Humedal)", descripcion: "Ecosistema hídrico y humedal del Barrio San Luis.", lat: 7.890978, lng: -72.481506, iconHtml: "💧" },
+      { nombre: "🏫 Colegio Carlos Pérez Escalante - Sede Central", descripcion: "Sede principal - Secundaria y Media.", lat: 7.893141, lng: -72.483717, iconHtml: "🏫" },
+      { nombre: "🏫 Colegio Carlos Pérez Escalante - Sede Santa Isabel de Hungría", descripcion: "Sede primaria e infancia.", lat: 7.893582, lng: -72.483078, iconHtml: "🏫" },
+      { nombre: "🏫 Colegio Carlos Pérez Escalante - Sede Nuestra Señora de Chiquinquirá", descripcion: "Sede educativa anexa.", lat: 7.890623, lng: -72.484450, iconHtml: "🏫" },
+      { nombre: "🏫 Colegio Carlos Pérez Escalante - Sede Marco Fidel Suárez", descripcion: "Sede primaria anexa.", lat: 7.895000, lng: -72.484000, iconHtml: "🏫" },
+      { nombre: "⛪ Parroquia San Luis Gonzaga", descripcion: "Iglesia principal del barrio.", lat: 7.892531, lng: -72.483066, iconHtml: "⛪" },
+      { nombre: "🪦 Cementerio Municipal de San Luis", descripcion: "Equipamiento patrimonial e histórico del sector.", lat: 7.892552, lng: -72.482068, iconHtml: "🪦" },
+      { nombre: "🏟️ Cancha / Polideportivo Comunitario", descripcion: "Equipamiento deportivo y recreativo.", lat: 7.892664, lng: -72.483651, iconHtml: "🏟️" }
+    ];
+
+    // ACTORES DE INVESTIGACIÓN
+    const actores = [
+      { id: 1, nombre: "1. Familia Ortiz", tipo: "Habitante (AC) / Docentes", figura: "triangulo", antiguedad: "75 años", direccion: "Av 1 # 15-64", investigador: "Yvana Mendoza", lat: 7.8912, lng: -72.4853 },
+      { id: 2, nombre: "2. Familia Sanabria", tipo: "Habitante (AC) / Docentes", figura: "triangulo", antiguedad: "46 años", direccion: "Calle 14 Av 1", investigador: "Kristopher Luna", lat: 7.8928, lng: -72.4851 },
+      { id: 3, nombre: "3. Familia Galvis Torres", tipo: "Habitante (AC)", figura: "triangulo", antiguedad: "50 años", direccion: "Calle 11 Av 7-32", investigador: "Diego Melgarejo / Kristopher Luna", lat: 7.8938, lng: -72.4813 },
+      { id: 4, nombre: "4. Familia Granados", tipo: "Habitante (AC)", figura: "triangulo", antiguedad: "40 años", direccion: "Calle 11 Av 7-27", investigador: "Diego Melgarejo / Kristopher Luna", lat: 7.8938, lng: -72.4810 },
+      { id: 5, nombre: "5. Familia Ochoa Contreras", tipo: "Habitante (AC)", figura: "triangulo", antiguedad: "40 años", direccion: "Calle 11 Av 7-30", investigador: "Diego Melgarejo / Kristopher Luna", lat: 7.8938, lng: -72.4807 },
+      { id: 6, nombre: "6. Armando Soto Leal", tipo: "Antiguo trabajador Chircal", figura: "triangulo", antiguedad: "Histórica", direccion: "Calle 10 # 7a-05", investigador: "Susana Jaimes / Andrés Merchán", lat: 7.8958, lng: -72.4818 },
+      { id: 7, nombre: "7. Familia Escalante", tipo: "Habitante (AC) / Docente", figura: "triangulo", antiguedad: "60 años", direccion: "Calle 11 Av 7", investigador: "Salomé Márquez / Isabela Contreras", lat: 7.8938, lng: -72.4804 },
+      { id: 8, nombre: "8. Familia Suárez Rojas", tipo: "Habitante (AC) / Peluquera", figura: "triangulo", antiguedad: "60 años", direccion: "Calle 12 Av 6", investigador: "Salomé Márquez / Isabela Contreras", lat: 7.8942, lng: -72.4828 },
+      { id: 9, nombre: "9. Salcedo Manrique", tipo: "Presidente JAC Santa Teresita", figura: "circulo", antiguedad: "Líder Comunal", direccion: "Barrio San Luis", investigador: "Susana Jaimes / Andrés Merchán", lat: 7.8946, lng: -72.4832 },
+      { id: 10, nombre: "10. Familia Peña Maldonado", tipo: "Habitante (AC) / Empleado", figura: "triangulo", antiguedad: "+60 años", direccion: "Av 3 Calle 16", investigador: "Susana Jaimes / Andrés Merchán", lat: 7.8900, lng: -72.4839 },
+      { id: 11, nombre: "11. Moros Villamizar", tipo: "Habitante (AC) / Empleado", figura: "triangulo", antiguedad: "+60 años", direccion: "Av 3 Calle 16", investigador: "Franyer Rojas", lat: 7.8900, lng: -72.4836 },
+      { id: 12, nombre: "12. Juan Carlos Contreras", tipo: "Presidente JAC", figura: "circulo", antiguedad: "Líder Comunal", direccion: "Barrio San Luis", investigador: "Diego Melgarejo / Kristopher Luna", lat: 7.8935, lng: -72.4836 }
+    ];
+
+    const markers = {};
+
+    // Evento de clic en el mapa
+    map.on('click', function(e) {
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+
+      document.getElementById('adminCoordDisplay').innerHTML = `<b>Punto Clickeado:</b><br>lat: ${lat}, lng: ${lng}`;
+
+      if (modoEdicion && actorSeleccionadoId !== null) {
+        const actor = actores.find(a => a.id === actorSeleccionadoId);
+        if (actor) {
+          actor.lat = parseFloat(lat);
+          actor.lng = parseFloat(lng);
+          markers[actor.id].setLatLng([actor.lat, actor.lng]);
+          document.getElementById('adminCoordDisplay').innerHTML = `<b>${actor.nombre} movido a:</b><br>lat: ${lat}, lng: ${lng}`;
+        }
+      }
+    });
+
+    hitos.forEach(hito => {
+      const icon = L.divIcon({
+        className: 'landmark-icon',
+        html: hito.iconHtml,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+
+      L.marker([hito.lat, hito.lng], { icon: icon })
+        .addTo(map)
+        .bindPopup(`<b>${hito.nombre}</b><br>${hito.descripcion}`);
+    });
+
+    function cargarActores(lista) {
+      const listContainer = document.getElementById('actorsList');
+      listContainer.innerHTML = '';
+
+      lista.forEach(actor => {
+        const symbolClass = actor.figura === 'triangulo' ? 'symbol-triangle' : 'symbol-circle';
+
+        const card = document.createElement('li');
+        card.className = 'actor-card';
+        card.id = `card-${actor.id}`;
+        card.innerHTML = `
+          <h4><span class="icon-symbol ${symbolClass}"></span> ${actor.nombre}</h4>
+          <p><strong>Ubicación:</strong> ${actor.direccion}</p>
+        `;
+        card.onclick = () => seleccionarActor(actor.id, true);
+        listContainer.appendChild(card);
+
+        if (!markers[actor.id]) {
+          const icono = actor.figura === 'triangulo' ? iconoTriangulo : iconoCirculo;
+          const marker = L.marker([actor.lat, actor.lng], { icon: icono, draggable: false }).addTo(map);
+          
+          marker.on('click', () => {
+            seleccionarActor(actor.id, false);
+          });
+
+          marker.on('dragend', function(e) {
+            const coord = e.target.getLatLng();
+            actor.lat = parseFloat(coord.lat.toFixed(6));
+            actor.lng = parseFloat(coord.lng.toFixed(6));
+            document.getElementById('adminCoordDisplay').innerHTML = `<b>${actor.nombre} (Arrastrado):</b><br>lat: ${actor.lat}, lng: ${actor.lng}`;
+          });
+
+          marker.bindPopup(`<b>${actor.nombre}</b><br>${actor.tipo}`);
+          markers[actor.id] = marker;
+        }
+      });
+    }
+
+    function toggleModoEdicion() {
+      modoEdicion = !modoEdicion;
+      const btn = document.getElementById('btnEditMode');
+
+      if (modoEdicion) {
+        btn.innerText = "Modo Asignación ACTIVO";
+        btn.classList.add('active');
+        document.getElementById('adminCoordDisplay').innerText = "Selecciona un actor y haz clic en el mapa para moverlo.";
+        
+        Object.values(markers).forEach(m => m.dragging.enable());
+      } else {
+        btn.innerText = "Modo Ubicación";
+        btn.classList.remove('active');
+        document.getElementById('adminCoordDisplay').innerText = "Haz clic en el mapa para obtener Lat/Lng...";
+        
+        Object.values(markers).forEach(m => m.dragging.disable());
+      }
+    }
+
+    function seleccionarActor(id, centrarMapa) {
+      actorSeleccionadoId = id;
+      const actor = actores.find(a => a.id === id);
+      if (!actor) return;
+
+      document.getElementById('det-nombre').innerText = actor.nombre;
+      document.getElementById('det-tipo').innerText = actor.tipo;
+      document.getElementById('det-antiguedad').innerText = actor.antiguedad;
+      document.getElementById('det-direccion').innerText = actor.direccion;
+      document.getElementById('det-investigador').innerText = actor.investigador;
+
+      document.getElementById('adminCoordDisplay').innerHTML = `<b>Actor Seleccionado (${actor.id}):</b><br>lat: ${actor.lat}, lng: ${actor.lng}`;
+
+      const symbolClass = actor.figura === 'triangulo' ? 'symbol-triangle' : 'symbol-circle';
+      document.getElementById('det-icono').innerHTML = `<span class="icon-symbol ${symbolClass}"></span>`;
+      
+      const detailsPanel = document.getElementById('details-panel');
+      detailsPanel.classList.add('active');
+
+      document.querySelectorAll('.actor-card').forEach(c => c.classList.remove('selected'));
+      const card = document.getElementById(`card-${id}`);
+      if (card) card.classList.add('selected');
+
+      if (centrarMapa) {
+        map.flyTo([actor.lat, actor.lng], 18, { duration: 1.2 });
+      }
+      markers[id].openPopup();
+    }
+
+    function exportarCoordenadas() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(actores, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "actores_coordenadas.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function filtrarActores() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtrados = actores.filter(a => 
+        a.nombre.toLowerCase().includes(query) ||
+        a.direccion.toLowerCase().includes(query) ||
+        a.tipo.toLowerCase().includes(query)
+      );
+      cargarActores(filtrados);
+    }
+
+    // Atajo de teclado (tecla "A") para ocultar/mostrar el Panel Admin
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'a' || e.key === 'A') {
+        const panel = document.getElementById('adminPanel');
+        panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+      }
+    });
+
+    cargarActores(actores);
+  </script>
+</body>
+</html>
